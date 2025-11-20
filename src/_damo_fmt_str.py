@@ -244,6 +244,11 @@ def text_to_nr(txt):
         pass
     return float(new_txt)
 
+def text_to_hex(txt):
+    if type(txt) == int:
+        return txt
+    return int(txt, 16)
+
 def try_common_input(txt, min_val=0, max_val=ulong_max):
     'return success and number'
     if txt == 'min':

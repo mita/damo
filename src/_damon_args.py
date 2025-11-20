@@ -107,6 +107,20 @@ def damon_nr_regions_range_for(args_range, args_minr, args_maxr):
     override_vals(nr_range, [args_minr, args_maxr])
     return _damon.DamonNrRegionsRange(*nr_range)
 
+def damon_region_sz_range_for(args):
+    default_range = _damon.DamonRegionSzRange()
+    range1 = _damon.DamonRegionSzRange(*args.monitoring_region_sz_range)
+    if not range1 == default_range:
+        return range1
+    return default_range
+
+def damon_perf_events_for(args):
+    events = []
+    if args.perf_event:
+        for event in args.perf_event:
+            events.append(_damon.DamonPerfEvent(*event))
+    return events
+
 def schemes_option_to_damos(schemes):
     if os.path.isfile(schemes):
         with open(schemes, 'r') as f:
@@ -501,6 +515,10 @@ def damon_target_for(args, idx, ops):
             args.regions[idx], ops, args.numa_node[idx])
     if err:
         return None, err
+    try:
+        region_sz_range = damon_region_sz_range_for(args)
+    except Exception as e:
+        return None, 'invalid region_sz arguments (%s)' % e
 
     try:
         obsolete = False
@@ -508,7 +526,7 @@ def damon_target_for(args, idx, ops):
             obsolete = True
         target = _damon.DamonTarget(
                 args.target_pid[idx] if _damon.target_has_pid(ops) else None,
-                init_regions, obsolete=obsolete)
+                init_regions, region_sz_range, obsolete=obsolete)
     except Exception as e:
         return None, 'Wrong \'--target_pid\' argument (%s)' % e
     return target, None
@@ -606,6 +624,10 @@ def damon_ctx_for(args, idx):
                 args.minr[idx], args.maxr[idx])
     except Exception as e:
         return None, 'invalid nr_regions arguments (%s)' % e
+    try:
+        perf_events = damon_perf_events_for(args)
+    except Exception as e:
+        return None, 'invalid perf_event arguments (%s)' % e
     ops = args.ops[idx]
     sample_control, ops_attrs, err = build_sample_control_ops_attrs(args, idx)
     if err is not None:
@@ -613,7 +635,7 @@ def damon_ctx_for(args, idx):
 
     try:
         ctx = _damon.DamonCtx(
-                ops, None, intervals, nr_regions, schemes=[],
+                ops, None, intervals, nr_regions, perf_events, schemes=[],
                 sample_control=sample_control, ops_attrs=ops_attrs)
         return ctx, None
     except Exception as e:
@@ -1034,6 +1056,15 @@ def set_monitoring_attrs_argparser(parser, hide_help=False):
     parser.add_argument('--sample_primitives', action='append',
                         choices=['page_table', 'page_fault'], nargs='+',
                         help='access sampling primitives to use'
+                        if not hide_help else argparse.SUPPRESS)
+    parser.add_argument('--monitoring_region_sz_range', nargs=2,
+                        metavar=('<min>', '<max>'), default=[0, 0],
+                        help='min/max size of monitoring regions (bytes)'
+                        if not hide_help else argparse.SUPPRESS)
+    parser.add_argument('--perf_event', nargs=6,
+                        metavar=('<sample freq>', '<sample phys addr>', '<type>', '<config>', '<config1>', '<config2>'),
+                        default=[], action='append',
+                        help='monitoring perf_event'
                         if not hide_help else argparse.SUPPRESS)
 
 def set_monitoring_damos_common_args(parser, hide_help=False):

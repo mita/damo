@@ -52,14 +52,18 @@ class TestDamonArgs(unittest.TestCase):
         self.assertEqual(err, None)
         ctx = ctxs[0]
         self.assertEqual(ctx, _damon.DamonCtx('paddr',
-            [_damon.DamonTarget(None, [_damon.DamonRegion(123, 456)])],
+            [_damon.DamonTarget(None, [_damon.DamonRegion(123, 456)], _damon.DamonRegionSzRange())],
             _damon.DamonIntervals(5000, 100000, 1000000),
-            _damon.DamonNrRegionsRange(10, 1000), []))
+            _damon.DamonNrRegionsRange(10, 1000),
+            [],
+            []))
 
         self.assertEqual(ctx, _damon.DamonCtx('paddr',
-            [_damon.DamonTarget(None, [_damon.DamonRegion(123, 456)])],
+            [_damon.DamonTarget(None, [_damon.DamonRegion(123, 456)], _damon.DamonRegionSzRange())],
             _damon.DamonIntervals(5000, 100000, 1000000),
-            _damon.DamonNrRegionsRange(10, 1000), []))
+            _damon.DamonNrRegionsRange(10, 1000),
+            [],
+            []))
 
         args = parser.parse_args(
                 ('--sample 5ms --aggr 100ms --updr 1s ' +
@@ -70,9 +74,11 @@ class TestDamonArgs(unittest.TestCase):
         self.assertEqual(err, None)
         ctx = ctxs[0]
         self.assertEqual(ctx, _damon.DamonCtx('paddr',
-            [_damon.DamonTarget(None, [_damon.DamonRegion(1024, 4096)])],
+            [_damon.DamonTarget(None, [_damon.DamonRegion(1024, 4096)], _damon.DamonRegionSzRange())],
             _damon.DamonIntervals(5000, 100000, 1000000),
-            _damon.DamonNrRegionsRange(10, 1000), []))
+            _damon.DamonNrRegionsRange(10, 1000),
+            [],
+            []))
 
         parser = argparse.ArgumentParser()
         _damon_args.set_argparser(
@@ -86,9 +92,11 @@ class TestDamonArgs(unittest.TestCase):
         self.assertEqual(err, None)
         ctx = ctxs[0]
         self.assertEqual(ctx, _damon.DamonCtx('paddr',
-            [_damon.DamonTarget(None, [_damon.DamonRegion(1024, 4096)])],
+            [_damon.DamonTarget(None, [_damon.DamonRegion(1024, 4096)], _damon.DamonRegionSzRange())],
             _damon.DamonIntervals(5000, 100000, 1000000),
-            _damon.DamonNrRegionsRange(10, 1000), []))
+            _damon.DamonNrRegionsRange(10, 1000),
+            [],
+            []))
 
     def test_damon_intervals_for(self):
         parser = argparse.ArgumentParser()

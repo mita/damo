@@ -184,6 +184,80 @@ class DamonNrRegionsRange:
             ('max', _damo_fmt_str.format_nr(self.maximum, raw)),
             ])
 
+class DamonRegionSzRange:
+    minimum = None
+    maximum = None
+
+    def __init__(self, min_=0, max_=0):
+        self.minimum = _damo_fmt_str.text_to_bytes(min_)
+        self.maximum = _damo_fmt_str.text_to_bytes(max_)
+
+    def to_str(self, raw):
+        return '[%s, %s]' % (
+                _damo_fmt_str.format_sz(self.minimum, raw),
+                _damo_fmt_str.format_sz(self.maximum, raw))
+
+    def __str__(self):
+        return self.to_str(False)
+
+    def __eq__(self, other):
+        return type(self) == type(other) and '%s' % self == '%s' % other
+
+    @classmethod
+    def from_kvpairs(cls, kvpairs):
+        return DamonRegionSzRange(kvpairs['min'], kvpairs['max'])
+
+    def to_kvpairs(self, raw=False):
+        return collections.OrderedDict([
+            ('min', _damo_fmt_str.format_sz(self.minimum, raw)),
+            ('max', _damo_fmt_str.format_sz(self.maximum, raw)),
+            ])
+
+class DamonPerfEvent:
+    attr_type = None
+    config = None
+    config1 = None
+    config2 = None
+    sample_phys_addr = None
+    sample_freq = None
+
+    def __init__(self, sample_freq=0, sample_phys_addr=0, attr_type='0x0', config='0x0', config1='0x0', config2='0x0'):
+        self.sample_freq = _damo_fmt_str.text_to_nr(sample_freq)
+        self.sample_phys_addr = _damo_fmt_str.text_to_nr(sample_phys_addr)
+        self.attr_type = _damo_fmt_str.text_to_hex(attr_type)
+        self.config = _damo_fmt_str.text_to_hex(config)
+        self.config1 = _damo_fmt_str.text_to_hex(config1)
+        self.config2 = _damo_fmt_str.text_to_hex(config2)
+
+    def to_str(self, raw):
+        return '[%s, %s, %#x, %#x, %#x, %#x]' % (
+                _damo_fmt_str.format_nr(self.sample_freq, raw),
+                _damo_fmt_str.format_nr(self.sample_phys_addr, raw),
+                self.attr_type,
+                self.config,
+                self.config1,
+                self.config2)
+
+    def __str__(self):
+        return self.to_str(False)
+
+    def __eq__(self, other):
+        return type(self) == type(other) and '%s' % self == '%s' % other
+
+    @classmethod
+    def from_kvpairs(cls, kvpairs):
+        return DamonPerfEvent(kvpairs['sample_freq'], kvpairs['sample_phys_addr'], kvpairs['type'], kvpairs['config'], kvpairs['config1'], kvpairs['config2'])
+
+    def to_kvpairs(self, raw=False):
+        return collections.OrderedDict([
+            ('sample_freq', _damo_fmt_str.format_nr(self.sample_freq, raw)),
+            ('sample_phys_addr', _damo_fmt_str.format_nr(self.sample_phys_addr, raw)),
+            ('type', '%#x' % self.attr_type),
+            ('config', '%#x' % self.config),
+            ('config1', '%#x' % self.config1),
+            ('config2', '%#x' % self.config2),
+            ])
+
 damon_filter_type_cpumask = 'cpumask'
 damon_filter_type_threads = 'threads'
 damon_filter_type_write = 'write'
@@ -534,11 +608,13 @@ class DamonTarget:
     pid = None
     obsolete = None
     regions = None
+    region_sz_range = None
     context = None
 
-    def __init__(self, pid, regions=[], obsolete=False):
+    def __init__(self, pid, regions=[], region_sz_range=None, obsolete=False):
         self.pid = pid
         self.regions = regions
+        self.region_sz_range = region_sz_range
         self.obsolete = _damo_fmt_str.text_to_bool(obsolete)
 
     def to_str(self, raw):
@@ -549,6 +625,8 @@ class DamonTarget:
             line.sappend('(obsolete)')
         for region in self.regions:
             lines.append('region %s' % region.to_str(raw))
+        if self.region_sz_range is not None:
+            lines.append('region_sz: %s' % self.region_sz_range.to_str(raw))
         return '\n'.join(lines)
 
     def __str__(self):
@@ -560,16 +638,21 @@ class DamonTarget:
     @classmethod
     def from_kvpairs(cls, kvpairs):
         regions = [DamonRegion.from_kvpairs(kvp) for kvp in kvpairs['regions']]
+        region_sz_range = None
+        if 'region_sz' in kvpairs and kvpairs['region_sz'] != None:
+            region_sz_range = DamonRegionSzRange.from_kvpairs(kvpairs['region_sz'])
         obsolete = False
         if 'obsolete' in kvpairs:
             obsolete = kvpairs['obsolete']
-        return DamonTarget(kvpairs['pid'], regions, obsolete=obsolete)
+        return DamonTarget(kvpairs['pid'], regions, region_sz_range, obsolete=obsolete)
 
     def to_kvpairs(self, raw=False):
         kvp = collections.OrderedDict()
         kvp['pid'] = self.pid
         kvp['obsolete'] = self.obsolete
         kvp['regions'] = [r.to_kvpairs(raw) for r in self.regions]
+        kvp['region_sz'] = (self.region_sz_range.to_kvpairs(raw)
+            if self.region_sz_range is not None else None)
         return kvp
 
 class DamosAccessPattern:
@@ -1359,11 +1442,12 @@ class DamonCtx:
     intervals = None
     nr_regions = None
     sample_control = None
+    perf_events = None
     schemes = None
     kdamond = None
 
     def __init__(self, ops='paddr', targets=None, intervals=None,
-                 nr_regions=None, schemes=None, ops_attrs=None,
+                 nr_regions=None, perf_events=None, schemes=None, ops_attrs=None,
                  sample_control=None):
         self.ops = ops
         self.ops_attrs = ops_attrs if ops_attrs is not None else OpsAttrs()
@@ -1377,6 +1461,7 @@ class DamonCtx:
         if sample_control is None:
             sample_control = DamonSampleControl()
         self.sample_control = sample_control
+        self.perf_events = perf_events if perf_events is not None else []
         self.schemes = schemes if schemes is not None else Damos()
         for scheme in self.schemes:
             scheme.context = self
@@ -1401,6 +1486,9 @@ class DamonCtx:
             lines.append(
                     _damo_fmt_str.indent_lines(self.intervals.to_str(raw), 4))
         lines.append('nr_regions: %s' % self.nr_regions.to_str(raw))
+        for idx, perf_event in enumerate(self.perf_events):
+            lines.append('perf_event %d' % idx)
+            lines.append(_damo_fmt_str.indent_lines(perf_event.to_str(raw), 4))
         for idx, scheme in enumerate(self.schemes):
             lines.append('scheme %d' % idx)
             lines.append(_damo_fmt_str.indent_lines(
@@ -1432,6 +1520,8 @@ class DamonCtx:
                     if 'intervals' in kv else DamonIntervals(),
                 DamonNrRegionsRange.from_kvpairs(kv['nr_regions'])
                     if 'nr_regions' in kv else DamonNrRegionsRange(),
+                [DamonPerfEvent.from_kvpairs(p) for p in kv['perf_events']]
+                    if 'perf_events' in kv else [],
                 [Damos.from_kvpairs(s) for s in kv['schemes']]
                     if 'schemes' in kv else [],
                 sample_control=sample_control)
@@ -1446,6 +1536,7 @@ class DamonCtx:
         if not omit_defaults or self.nr_regions != DamonNrRegionsRange():
             kv['nr_regions'] = self.nr_regions.to_kvpairs(raw)
         kv['sample_control'] = self.sample_control.to_kvpairs(raw)
+        kv['perf_events'] = [p.to_kvpairs(raw) for p in self.perf_events]
         kv['schemes'] = [s.to_kvpairs(raw, omit_defaults, params_only)
                          for s in self.schemes]
         return kv
@@ -1790,12 +1881,12 @@ def add_vaddr_child_targets(ctx):
     updated_targets = []
     child_targets = []
     for orig_target in orig_targets:
-        updated_targets.append(DamonTarget(pid=orig_target.pid, regions=[]))
+        updated_targets.append(DamonTarget(pid=orig_target.pid, regions=[], region_sz_range=DamonRegionSzRange()))
         if not pid_running(orig_target.pid):
             updated_targets[-1].obsolete = True
             changes_made = True
         for child_pid in get_childs_pids('%s' % orig_target.pid):
-            child_targets.append(DamonTarget(pid=child_pid, regions=[]))
+            child_targets.append(DamonTarget(pid=child_pid, regions=[], region_sz_range=DamonRegionSzRange()))
             changes_made = True
     if changes_made:
         if feature_supported('obsolete_target'):

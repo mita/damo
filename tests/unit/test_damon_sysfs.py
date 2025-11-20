@@ -34,6 +34,7 @@ class TestDamonSysfs(unittest.TestCase):
                                 "nr_regions": {
                                     "max": "1000\n", "min": "10\n"}
                                 },
+                            "perf_events": { "nr_perf_events": "0\n" },
                             "targets": {"nr_targets": "0\n"},
                             "schemes": {
                                 "nr_schemes": "1\n",
@@ -81,6 +82,7 @@ class TestDamonSysfs(unittest.TestCase):
                 "write '1000000' to '0/contexts/0/monitoring_attrs/intervals/update_us'",
                 "write '10' to '0/contexts/0/monitoring_attrs/nr_regions/min'",
                 "write '1000' to '0/contexts/0/monitoring_attrs/nr_regions/max'",
+                "read '0/contexts/0/perf_events/nr_perf_events': '0'",
                 "read '0/contexts/0/targets/nr_targets': '0'",
                 "read '0/contexts/0/schemes/nr_schemes': '0'",
                 "write '1' to '0/contexts/0/schemes/nr_schemes'",
@@ -108,6 +110,7 @@ class TestDamonSysfs(unittest.TestCase):
                 {
                     'nr_kdamonds': '0',
                     '0/contexts/nr_contexts': '0',
+                    '0/contexts/0/perf_events/nr_perf_events': '0',
                     '0/contexts/0/targets/nr_targets': '0',
                     '0/contexts/0/schemes/nr_schemes': '0',
                     })

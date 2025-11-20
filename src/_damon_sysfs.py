@@ -498,6 +498,18 @@ def write_target_dir(dir_path, target):
     elif target.obsolete:
         return 'obsolete_target unsupported'
 
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'region_sz', 'min'),
+            '%d' % target.region_sz_range.minimum)
+    if err is not None:
+        return err
+
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'region_sz', 'max'),
+            '%d' % target.region_sz_range.maximum)
+    if err is not None:
+        return err
+
     return write_target_regions_dir(
             os.path.join(dir_path, 'regions'), target.regions)
 
@@ -548,6 +560,54 @@ def write_ops_attrs_dir(dir_path, ops_attrs):
     err = _damo_fs.write_file(os.path.join(dir_path, 'tids'), ops_attrs.tids)
     if err is not None:
         return err
+
+def write_perf_event_dir(dir_path, perf_event):
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'sample_freq'),
+            '%d' % perf_event.sample_freq)
+    if err is not None:
+        return err
+
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'sample_phys_addr'),
+            '%d' % perf_event.sample_phys_addr)
+    if err is not None:
+        return err
+
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'type'),
+            '%#x' % perf_event.attr_type)
+    if err is not None:
+        return err
+
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'config'),
+            '%#x' % perf_event.config)
+    if err is not None:
+        return err
+
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'config1'),
+            '%#x' % perf_event.config1)
+    if err is not None:
+        return err
+
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'config2'),
+            '%#x' % perf_event.config2)
+    if err is not None:
+        return err
+
+def write_perf_events_dir(dir_path, perf_events):
+    err = ensure_nr_file_for(os.path.join(dir_path, 'nr_perf_events'), perf_events)
+    if err is not None:
+        return err
+
+    for idx, perf_event in enumerate(perf_events):
+        err = write_perf_event_dir(os.path.join(dir_path, '%d' % idx), perf_event)
+        if err is not None:
+            return err
+    return None
 
 def write_sample_filter_dir(dir_path, sample_filter):
     err = _damo_fs.write_file(
@@ -667,6 +727,11 @@ def write_context_dir(dir_path, context):
 
     err = write_monitoring_attrs_dir(
             os.path.join(dir_path, 'monitoring_attrs'), context)
+    if err is not None:
+        return err
+
+    err = write_perf_events_dir(
+            os.path.join(dir_path, 'perf_events'), context.perf_events)
     if err is not None:
         return err
 
@@ -938,7 +1003,13 @@ def files_content_to_target(files_content):
     if 'obsolete_target' in files_content:
         obsolete = files_content['obsolete_target'].strip()
     regions = files_content_to_regions(files_content['regions'])
-    return _damon.DamonTarget(pid, regions, obsolete=obsolete)
+
+    region_sz_content = files_content['region_sz']
+    region_sz_range = _damon.DamonRegionSzRange(
+            int(region_sz_content['min']),
+            int(region_sz_content['max']))
+
+    return _damon.DamonTarget(pid, regions, region_sz_range, obsolete=obsolete)
 
 def files_content_to_sample_filter(files_content):
     filter_type = files_content['type'].strip()
@@ -973,6 +1044,15 @@ def files_content_to_ops_attrs(files_content):
     return _damon.OpsAttrs(use_reports=use_reports, write_only=write_only,
                            cpus=cpus, tids=tids)
 
+def files_content_to_perf_event(files_content):
+    return _damon.DamonPerfEvent(
+            int(files_content['sample_freq']),
+            int(files_content['sample_phys_addr']),
+            int(files_content['type'], 16),
+            int(files_content['config'], 16),
+            int(files_content['config1'], 16),
+            int(files_content['config2'], 16))
+
 def files_content_to_context(files_content):
     mon_attrs_content = files_content['monitoring_attrs']
     intervals_content = mon_attrs_content['intervals']
@@ -998,6 +1078,11 @@ def files_content_to_context(files_content):
     else:
         sample_control = _damon.DamonSampleControl()
     ops = files_content['operations'].strip()
+    perf_events_content = files_content['perf_events']
+    perf_events = [files_content_to_perf_event(content)
+            for content in numbered_dirs_content(
+                perf_events_content, 'nr_perf_events')]
+
     if 'operations_attrs' in files_content:
         ops_attrs = files_content_to_ops_attrs(
                 files_content['operations_attrs'])
@@ -1014,7 +1099,7 @@ def files_content_to_context(files_content):
             for content in numbered_dirs_content(
                 schemes_content, 'nr_schemes')]
 
-    return _damon.DamonCtx(ops, targets, intervals, nr_regions, schemes,
+    return _damon.DamonCtx(ops, targets, intervals, nr_regions, perf_events, schemes,
                            ops_attrs=ops_attrs, sample_control=sample_control)
 
 def files_content_to_kdamond(files_content):
@@ -1146,7 +1231,7 @@ def mk_feature_supports_map():
                 state=None, pid=None, contexts=[
                     _damon.DamonCtx(
                         targets=[_damon.DamonTarget(
-                            pid=None, regions=[])],
+                            pid=None, regions=[], region_sz_range=_damon.DamonRegionSzRange())],
                         schemes=[_damon.Damos()])])]
     err = stage_kdamonds(kdamonds_for_feature_check)
     if err is not None:
@@ -1228,7 +1313,7 @@ def mk_feature_supports_map():
                     state=None, pid=None, contexts=[
                         _damon.DamonCtx(
                             targets=[_damon.DamonTarget(
-                                pid=None, regions=[])],
+                                pid=None, regions=[], region_sz_range=_damon.DamonRegionSzRange())],
                             schemes=[_damon.Damos(
                                 quotas=_damon.DamosQuotas(
                                     goals=[_damon.DamosQuotaGoal()])
