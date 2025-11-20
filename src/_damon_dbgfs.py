@@ -307,7 +307,7 @@ def files_content_to_kdamonds(files_content):
                 continue
             schemes.append(debugfs_output_to_damos(line, intervals))
 
-    ctx = _damon.DamonCtx(ops, targets, intervals, nr_regions, schemes)
+    ctx = _damon.DamonCtx(ops, targets, intervals, nr_regions, None, schemes)
     if 'monitor_on' in files_content:
         state = files_content['monitor_on'].strip()
     else:

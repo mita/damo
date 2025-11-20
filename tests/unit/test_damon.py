@@ -18,7 +18,7 @@ class TestDamon(unittest.TestCase):
         target_kvpairs = target.to_kvpairs()
         self.assertEqual(type(target_kvpairs), collections.OrderedDict)
         self.assertEqual(list(target_kvpairs.keys()),
-                ['pid', 'obsolete', 'regions'])
+                ['pid', 'obsolete', 'regions', 'region_sz'])
         self.assertEqual(target,
                 _damon.DamonTarget.from_kvpairs(target_kvpairs))
 
@@ -47,11 +47,12 @@ class TestDamon(unittest.TestCase):
         ctx = _damon.DamonCtx('paddr', [target],
                 _damon.DamonIntervals(5000, 100000, 1000000),
                 _damon.DamonNrRegionsRange(10, 1000),
+                [],
                 [damos])
         ctx_kvpairs = ctx.to_kvpairs()
         self.assertEqual(type(ctx_kvpairs), collections.OrderedDict)
         self.assertEqual(list(ctx_kvpairs.keys()),
-                ['ops', 'targets', 'intervals', 'nr_regions', 'sample_control',
+                ['ops', 'targets', 'intervals', 'nr_regions', 'perf_events', 'sample_control',
                  'schemes'])
         self.assertEqual(ctx, _damon.DamonCtx.from_kvpairs(ctx_kvpairs))
 
