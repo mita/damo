@@ -570,6 +570,54 @@ def write_ops_attrs_dir(dir_path, ops_attrs):
     if err is not None:
         return err
 
+def write_perf_event_dir(dir_path, perf_event):
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'sample_freq'),
+            '%d' % perf_event.sample_freq)
+    if err is not None:
+        return err
+
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'sample_phys_addr'),
+            '%d' % perf_event.sample_phys_addr)
+    if err is not None:
+        return err
+
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'type'),
+            '%#x' % perf_event.attr_type)
+    if err is not None:
+        return err
+
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'config'),
+            '%#x' % perf_event.config)
+    if err is not None:
+        return err
+
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'config1'),
+            '%#x' % perf_event.config1)
+    if err is not None:
+        return err
+
+    err = _damo_fs.write_file(
+            os.path.join(dir_path, 'config2'),
+            '%#x' % perf_event.config2)
+    if err is not None:
+        return err
+
+def write_perf_events_dir(dir_path, perf_events):
+    err = ensure_nr_file_for(os.path.join(dir_path, 'nr_perf_events'), perf_events)
+    if err is not None:
+        return err
+
+    for idx, perf_event in enumerate(perf_events):
+        err = write_perf_event_dir(os.path.join(dir_path, '%d' % idx), perf_event)
+        if err is not None:
+            return err
+    return None
+
 def write_sample_filter_dir(dir_path, sample_filter):
     err = _damo_fs.write_file(
             os.path.join(dir_path, 'type'), sample_filter.filter_type)
@@ -631,6 +679,12 @@ def write_sample_control_dir(dir_path, sample_control):
             'Y' if sample_control.primitives_enabled.page_fault else 'N')
     if err is not None:
         return err
+
+    err = write_perf_events_dir(
+            os.path.join(dir_path, 'primitives', 'perf_events'), sample_control.perf_events)
+    if err is not None:
+        return err
+
     return write_sample_filters_dir(
             os.path.join(dir_path, 'filters'), sample_control.sample_filters)
 
@@ -1006,9 +1060,15 @@ def files_content_to_sample_control(files_content):
     primitives_enabled = _damon.DamonPrimitivesEnabled(
             page_table=page_table, page_fault=page_fault)
     sample_filters = files_content_to_sample_filters(files_content['filters'])
+
+    perf_events_content = files_content['primitives']['perf_events']
+    perf_events = [files_content_to_perf_event(content)
+            for content in numbered_dirs_content(
+                perf_events_content, 'nr_perf_events')]
     return _damon.DamonSampleControl(
             primitives_enabled=primitives_enabled,
-            sample_filters=sample_filters)
+            sample_filters=sample_filters,
+            perf_events=perf_events)
 
 def files_content_to_ops_attrs(files_content):
     use_reports = files_content['use_reports'].strip()
@@ -1017,6 +1077,15 @@ def files_content_to_ops_attrs(files_content):
     tids = files_content['tids'].strip()
     return _damon.OpsAttrs(use_reports=use_reports, write_only=write_only,
                            cpus=cpus, tids=tids)
+
+def files_content_to_perf_event(files_content):
+    return _damon.DamonPerfEvent(
+            int(files_content['sample_freq']),
+            int(files_content['sample_phys_addr']),
+            int(files_content['type'], 16),
+            int(files_content['config'], 16),
+            int(files_content['config1'], 16),
+            int(files_content['config2'], 16))
 
 def files_content_to_context(files_content):
     mon_attrs_content = files_content['monitoring_attrs']

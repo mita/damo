@@ -184,6 +184,51 @@ class DamonNrRegionsRange:
             ('max', _damo_fmt_str.format_nr(self.maximum, raw)),
             ])
 
+class DamonPerfEvent:
+    attr_type = None
+    config = None
+    config1 = None
+    config2 = None
+    sample_phys_addr = None
+    sample_freq = None
+
+    def __init__(self, sample_freq=0, sample_phys_addr=0, attr_type='0x0', config='0x0', config1='0x0', config2='0x0'):
+        self.sample_freq = _damo_fmt_str.text_to_nr(sample_freq)
+        self.sample_phys_addr = _damo_fmt_str.text_to_nr(sample_phys_addr)
+        self.attr_type = _damo_fmt_str.text_to_hex(attr_type)
+        self.config = _damo_fmt_str.text_to_hex(config)
+        self.config1 = _damo_fmt_str.text_to_hex(config1)
+        self.config2 = _damo_fmt_str.text_to_hex(config2)
+
+    def to_str(self, raw):
+        return '[%s, %s, %#x, %#x, %#x, %#x]' % (
+                _damo_fmt_str.format_nr(self.sample_freq, raw),
+                _damo_fmt_str.format_nr(self.sample_phys_addr, raw),
+                self.attr_type,
+                self.config,
+                self.config1,
+                self.config2)
+
+    def __str__(self):
+        return self.to_str(False)
+
+    def __eq__(self, other):
+        return type(self) == type(other) and '%s' % self == '%s' % other
+
+    @classmethod
+    def from_kvpairs(cls, kvpairs):
+        return DamonPerfEvent(kvpairs['sample_freq'], kvpairs['sample_phys_addr'], kvpairs['type'], kvpairs['config'], kvpairs['config1'], kvpairs['config2'])
+
+    def to_kvpairs(self, raw=False):
+        return collections.OrderedDict([
+            ('sample_freq', _damo_fmt_str.format_nr(self.sample_freq, raw)),
+            ('sample_phys_addr', _damo_fmt_str.format_nr(self.sample_phys_addr, raw)),
+            ('type', '%#x' % self.attr_type),
+            ('config', '%#x' % self.config),
+            ('config1', '%#x' % self.config1),
+            ('config2', '%#x' % self.config2),
+            ])
+
 damon_filter_type_cpumask = 'cpumask'
 damon_filter_type_threads = 'threads'
 damon_filter_type_write = 'write'
@@ -282,14 +327,18 @@ class DamonPrimitivesEnabled:
 class DamonSampleControl:
     primitives_enabled = None
     sample_filters = None
+    perf_events = None
 
-    def __init__(self, primitives_enabled=None, sample_filters=None):
+    def __init__(self, primitives_enabled=None, sample_filters=None, perf_events=None):
         if primitives_enabled is None:
             primitives_enabled = DamonPrimitivesEnabled()
         if sample_filters is None:
             sample_filters = []
+        if perf_events is None:
+            perf_events = []
         self.primitives_enabled = primitives_enabled
         self.sample_filters = sample_filters
+        self.perf_events = perf_events
 
     def to_str(self, raw):
         lines = [
@@ -298,6 +347,10 @@ class DamonSampleControl:
             lines.append('Filters')
             for filter in self.sample_filters:
                 lines.append('- %s' % filter.to_str(raw))
+        if len(self.perf_events) > 0:
+            lines.append('PerfEvents')
+            for perf_event in self.perf_events:
+                lines.append('- %s' % perf_event.to_str(raw))
         return '\n'.join(lines)
 
     def __str__(self):
@@ -306,7 +359,8 @@ class DamonSampleControl:
     def __eq__(self, other):
         return type(self) == type(other) and \
                 self.primitives_enabled == other.primitives_enabled and \
-                self.sample_filters == other.sample_filters
+                self.sample_filters == other.sample_filters and \
+                self.perf_events == other.perf_events
 
     @classmethod
     def from_kvpairs(cls, kv):
@@ -314,13 +368,17 @@ class DamonSampleControl:
                 primitives_enabled=DamonPrimitivesEnabled.from_kvpairs(
                     kv['primitives_enabled']),
                 sample_filters=[DamonSampleFilter.from_kvpairs(kvpairs)
-                                for kvpairs in kv['sample_filters']])
+                                for kvpairs in kv['sample_filters']],
+                perf_events=[DamonPerfEvent.from_kvpairs(p)
+                                for p in kv['perf_events']])
 
     def to_kvpairs(self, raw=False):
         return collections.OrderedDict([
             ('primitives_enabled', self.primitives_enabled.to_kvpairs(raw)),
             ('sample_filters', [
                 f.to_kvpairs(raw) for f in self.sample_filters]),
+            ('perf_events', [
+                p.to_kvpairs(raw) for p in self.perf_events])
             ])
 
 unit_percent = 'percent'

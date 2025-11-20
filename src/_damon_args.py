@@ -110,6 +110,13 @@ def damon_nr_regions_range_for(args_range, args_minr, args_maxr):
     override_vals(nr_range, [args_minr, args_maxr])
     return _damon.DamonNrRegionsRange(*nr_range)
 
+def damon_perf_events_for(args):
+    events = []
+    if args.perf_event:
+        for event in args.perf_event:
+            events.append(_damon.DamonPerfEvent(*event))
+    return events
+
 def schemes_option_to_damos(schemes):
     if os.path.isfile(schemes):
         with open(schemes, 'r') as f:
@@ -544,6 +551,11 @@ def build_sample_control_ops_attrs(args, idx):
     '''
     Returns DamonSampleControl, OpsAttrs, and an error
     '''
+    perf_events = []
+    try:
+        perf_events = damon_perf_events_for(args)
+    except Exception as e:
+        return None, None, 'invalid perf_event arguments (%s)' % e
     err = sample_control_to_ops_attrs_args(args, idx)
     if err is not None:
         return None, None, err
@@ -595,7 +607,8 @@ def build_sample_control_ops_attrs(args, idx):
             allow=True, tid_arr=tids))
     sample_control = _damon.DamonSampleControl(
             primitives_enabled=primitives_enabled,
-            sample_filters=sample_filters)
+            sample_filters=sample_filters,
+            perf_events=perf_events)
     return sample_control, None, None
 
 def damon_ctx_for(args, idx):
@@ -1266,6 +1279,11 @@ def set_monitoring_attrs_argparser(parser, hide_help=False):
     parser.add_argument('--sample_primitives', action='append',
                         choices=['page_table', 'page_fault'], nargs='+',
                         help='access sampling primitives to use'
+                        if not hide_help else argparse.SUPPRESS)
+    parser.add_argument('--perf_event', nargs=6,
+                        metavar=('<sample freq>', '<sample phys addr>', '<type>', '<config>', '<config1>', '<config2>'),
+                        default=[], action='append',
+                        help='monitoring perf_event'
                         if not hide_help else argparse.SUPPRESS)
 
 def set_monitoring_damos_common_args(parser, hide_help=False):
