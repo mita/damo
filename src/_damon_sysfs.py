@@ -510,11 +510,12 @@ def write_target_dir(dir_path, target):
     if err is not None:
         return err
 
-    err = _damo_fs.write_file(
+    if os.path.isfile(os.path.join(dir_path, 'region_sz', 'max')):
+        err = _damo_fs.write_file(
             os.path.join(dir_path, 'region_sz', 'max'),
             '%d' % target.region_sz_range.maximum)
-    if err is not None:
-        return err
+        if err is not None:
+             return err
 
     return write_target_regions_dir(
             os.path.join(dir_path, 'regions'), target.regions)
@@ -1012,9 +1013,12 @@ def files_content_to_target(files_content):
     regions = files_content_to_regions(files_content['regions'])
 
     region_sz_content = files_content['region_sz']
+    max = 0;
+    if 'max' in region_sz_content:
+        max = int(region_sz_content['max'])
     region_sz_range = _damon.DamonRegionSzRange(
             int(region_sz_content['min']),
-            int(region_sz_content['max']))
+            max)
 
     return _damon.DamonTarget(pid, regions, region_sz_range, obsolete=obsolete)
 
