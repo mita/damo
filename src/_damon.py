@@ -184,6 +184,35 @@ class DamonNrRegionsRange:
             ('max', _damo_fmt_str.format_nr(self.maximum, raw)),
             ])
 
+class DamonRegionSzRange:
+    minimum = None
+    maximum = None
+
+    def __init__(self, min_=0, max_=0):
+        self.minimum = _damo_fmt_str.text_to_bytes(min_)
+        self.maximum = _damo_fmt_str.text_to_bytes(max_)
+
+    def to_str(self, raw):
+        return '[%s, %s]' % (
+                _damo_fmt_str.format_sz(self.minimum, raw),
+                _damo_fmt_str.format_sz(self.maximum, raw))
+
+    def __str__(self):
+        return self.to_str(False)
+
+    def __eq__(self, other):
+        return type(self) == type(other) and '%s' % self == '%s' % other
+
+    @classmethod
+    def from_kvpairs(cls, kvpairs):
+        return DamonRegionSzRange(kvpairs['min'], kvpairs['max'])
+
+    def to_kvpairs(self, raw=False):
+        return collections.OrderedDict([
+            ('min', _damo_fmt_str.format_sz(self.minimum, raw)),
+            ('max', _damo_fmt_str.format_sz(self.maximum, raw)),
+            ])
+
 class DamonPerfEvent:
     attr_type = None
     config = None
@@ -592,11 +621,13 @@ class DamonTarget:
     pid = None
     obsolete = None
     regions = None
+    region_sz_range = None
     context = None
 
-    def __init__(self, pid, regions=[], obsolete=False):
+    def __init__(self, pid, regions=[], region_sz_range=None, obsolete=False):
         self.pid = pid
         self.regions = regions
+        self.region_sz_range = region_sz_range
         self.obsolete = _damo_fmt_str.text_to_bool(obsolete)
 
     def to_str(self, raw):
@@ -607,6 +638,8 @@ class DamonTarget:
             lines.append('(obsolete)')
         for region in self.regions:
             lines.append('region %s' % region.to_str(raw))
+        if self.region_sz_range is not None:
+            lines.append('region_sz: %s' % self.region_sz_range.to_str(raw))
         return '\n'.join(lines)
 
     def __str__(self):
@@ -618,16 +651,21 @@ class DamonTarget:
     @classmethod
     def from_kvpairs(cls, kvpairs):
         regions = [DamonRegion.from_kvpairs(kvp) for kvp in kvpairs['regions']]
+        region_sz_range = None
+        if 'region_sz' in kvpairs and kvpairs['region_sz'] != None:
+            region_sz_range = DamonRegionSzRange.from_kvpairs(kvpairs['region_sz'])
         obsolete = False
         if 'obsolete' in kvpairs:
             obsolete = kvpairs['obsolete']
-        return DamonTarget(kvpairs['pid'], regions, obsolete=obsolete)
+        return DamonTarget(kvpairs['pid'], regions, region_sz_range, obsolete=obsolete)
 
     def to_kvpairs(self, raw=False):
         kvp = collections.OrderedDict()
         kvp['pid'] = self.pid
         kvp['obsolete'] = self.obsolete
         kvp['regions'] = [r.to_kvpairs(raw) for r in self.regions]
+        kvp['region_sz'] = (self.region_sz_range.to_kvpairs(raw)
+            if self.region_sz_range is not None else None)
         return kvp
 
 class DamosAccessPattern:
@@ -1908,12 +1946,12 @@ def add_vaddr_child_targets(ctx):
     updated_targets = []
     child_targets = []
     for orig_target in orig_targets:
-        updated_targets.append(DamonTarget(pid=orig_target.pid, regions=[]))
+        updated_targets.append(DamonTarget(pid=orig_target.pid, regions=[], region_sz_range=DamonRegionSzRange()))
         if not pid_running(orig_target.pid):
             updated_targets[-1].obsolete = True
             changes_made = True
         for child_pid in get_childs_pids('%s' % orig_target.pid):
-            child_targets.append(DamonTarget(pid=child_pid, regions=[]))
+            child_targets.append(DamonTarget(pid=child_pid, regions=[], region_sz_range=DamonRegionSzRange()))
             changes_made = True
     if changes_made:
         if _damo_sysinfo.damon_feature_available('sysfs/obsolete_target'):
